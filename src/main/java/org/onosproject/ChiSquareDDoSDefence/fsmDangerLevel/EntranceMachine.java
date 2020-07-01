@@ -33,7 +33,7 @@ public class EntranceMachine {
             // 中危转单目标高危
             new EntranceMachineTransaction(
                     EntranceMachineState.MIDDLE_RISK,
-                    Action.CAUSE_ONLY_ONE_DST_MAC,
+                    Action.CAUSE_ONLY_ONE_DST_IP,
                     EntranceMachineState.SINGLE_TARGET_HIGH_RISK,
                     new nullEvent()),
 
@@ -61,7 +61,7 @@ public class EntranceMachine {
             // 单目标高危转被攻击
             new EntranceMachineTransaction(
                     EntranceMachineState.SINGLE_TARGET_HIGH_RISK,
-                    Action.CAUSE_ONLY_ONE_DST_MAC,
+                    Action.CAUSE_ONLY_ONE_DST_IP,
                     EntranceMachineState.ATTACKER,
                     new defenseEvent()),
 
@@ -89,7 +89,7 @@ public class EntranceMachine {
             // 多目标高危1转单目标高危
             new EntranceMachineTransaction(
                     EntranceMachineState.MULTIPLE_TARGET_HIGH_RISK1,
-                    Action.CAUSE_ONLY_ONE_DST_MAC,
+                    Action.CAUSE_ONLY_ONE_DST_IP,
                     EntranceMachineState.SINGLE_TARGET_HIGH_RISK,
                     new nullEvent()),
 
@@ -117,7 +117,7 @@ public class EntranceMachine {
             // 卡方值高危1转单目标高危
             new EntranceMachineTransaction(
                     EntranceMachineState.CHI_SQUARE_HIGH_RISK1,
-                    Action.CAUSE_ONLY_ONE_DST_MAC,
+                    Action.CAUSE_ONLY_ONE_DST_IP,
                     EntranceMachineState.SINGLE_TARGET_HIGH_RISK,
                     new nullEvent()),
 
@@ -145,7 +145,7 @@ public class EntranceMachine {
             // 多目标高危2转单目标高危
             new EntranceMachineTransaction(
                     EntranceMachineState.MULTIPLE_TARGET_HIGH_RISK2,
-                    Action.CAUSE_ONLY_ONE_DST_MAC,
+                    Action.CAUSE_ONLY_ONE_DST_IP,
                     EntranceMachineState.SINGLE_TARGET_HIGH_RISK,
                     new nullEvent()),
 
@@ -173,7 +173,7 @@ public class EntranceMachine {
             // 卡方值高危2转单目标高危
             new EntranceMachineTransaction(
                     EntranceMachineState.CHI_SQUARE_HIGH_RISK2,
-                    Action.CAUSE_ONLY_ONE_DST_MAC,
+                    Action.CAUSE_ONLY_ONE_DST_IP,
                     EntranceMachineState.SINGLE_TARGET_HIGH_RISK,
                     new nullEvent()),
 

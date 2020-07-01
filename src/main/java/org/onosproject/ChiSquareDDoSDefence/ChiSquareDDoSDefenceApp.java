@@ -24,6 +24,7 @@ import org.onosproject.event.AbstractListenerManager;
 import org.onosproject.mastership.MastershipEvent;
 import org.onosproject.mastership.MastershipListener;
 import org.onosproject.net.Device;
+import org.onosproject.net.HostId;
 import org.onosproject.net.device.DeviceEvent;
 import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.DeviceService;
@@ -35,7 +36,6 @@ import org.osgi.service.component.annotations.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Calendar;
 import java.util.Enumeration;
 import java.util.Hashtable;
 
@@ -62,26 +62,17 @@ public class ChiSquareDDoSDefenceApp
     // 低危状态的packet_in计数器
     private int lowCounter = 0;
 
-    // 第一个packet_in到达时间, 第一个之后每个packet_in到达时间
-    Long startTime, endTime;
-
-    // Calendar 实例
-    Calendar calendar = Calendar.getInstance();
+    // App启动时间, 每个packet_in到达时间
+    Long startTime, nowTime;
 
     // 中高危状态的packet_in计数器
     private int middleAndHighCounter = 0;
 
-    // 时间差
-    Long timeDiff;
-
-    // 加速度
-    double Acceleration;
-
     // 中高危数据样本数量
     private static final int MAX_PACKET_NUM = 50;
 
-    // MAC地址出现频数统计表
-    Hashtable<String, Integer> macFrequency = new Hashtable<>(MAX_PACKET_NUM);
+    // IP地址出现频数统计表
+    Hashtable<String, Integer> ipFrequency = new Hashtable<>(MAX_PACKET_NUM);
 
     // 卡方值阈值
     private static final double LOW_CHI_SQUARE_VALUE = 8.0;
@@ -113,7 +104,7 @@ public class ChiSquareDDoSDefenceApp
         coreService.registerApplication("org.onosproject.constantine3");
         packetService.addProcessor(processor, PacketProcessor.ADVISOR_MAX + 2);
         deviceService.addListener(deviceListener);
-        this.startTime = calendar.getTimeInMillis();
+        this.startTime = System.currentTimeMillis();
         log.info("Started");
     }
 
@@ -129,42 +120,39 @@ public class ChiSquareDDoSDefenceApp
         @Override
         public void process(PacketContext context) {
             InboundPacket pkt = context.inPacket();
-            Ethernet ethernet = pkt.parsed();
-            attackDetect(new String(ethernet.getDestinationMACAddress()));
+            Ethernet ethPkt = pkt.parsed();
+            HostId dstId = HostId.hostId(ethPkt.getDestinationMAC());
+            attackDetect(dstId.toString());
         }
     }
 
-    private void attackDetect(String dstMacAddress) {
+    private void attackDetect(String dstIpAddress) {
+
+        Long timeDiff;
+        double Acceleration;
+
         log.info("目前状态: " + entranceMachine.getState());
 
-        // 局域网中mac总数
-        int MAX_MAC_NUM = deviceService.getAvailableDeviceCount();
+        // 局域网中ip总数
+        int MAX_IP_NUM = deviceService.getAvailableDeviceCount();
 
         // 低危状态
         if (entranceMachine.getState().equals(EntranceMachineState.LOW_RISK)) {
             // 计数器加1
-            lowCounter = lowCounter + 1;
+            lowCounter += 1;
+
             // 计算packet_in加速度
-            if (lowCounter > 1) {
-                // 获取当前时间
-                endTime = calendar.getTimeInMillis();
-                // 计算时间差
-                timeDiff = endTime - this.startTime;
-                // 计算加速度
-                Acceleration = (2.0 * lowCounter) / (timeDiff * timeDiff);
-                log.info("加速度是 " + Acceleration);
-                // 如果实际加速度比阈值大, 低危状态转中危
-                if (Acceleration > lowAcceleration) {
-                    entranceMachine.execute(Action.EXCEED_SPEED_LIMIT);
-                } else {
-                    entranceMachine.execute(Action.STAY_IN_SPEED_LIMIT);
-                    return;
-                }
-            } else if (lowCounter == 1) {
+            nowTime = System.currentTimeMillis();
+            timeDiff = nowTime - this.startTime;
+            Acceleration = (2.0 * lowCounter) / (timeDiff * timeDiff);
+            log.info("加速度是 " + Acceleration);
+
+            // 如果实际加速度比阈值大, 低危状态转中危
+            if (Acceleration > lowAcceleration) {
+                entranceMachine.execute(Action.EXCEED_SPEED_LIMIT);
+            } else {
                 entranceMachine.execute(Action.STAY_IN_SPEED_LIMIT);
                 return;
-            } else {
-                log.error("低危状态计数器错误");
             }
         }
 
@@ -173,40 +161,40 @@ public class ChiSquareDDoSDefenceApp
         log.info("中高危包计数器: " + middleAndHighCounter);
         if (middleAndHighCounter < MAX_PACKET_NUM) {
             middleAndHighCounter += 1;
-            if (!macFrequency.containsKey(dstMacAddress)) {
-                macFrequency.put(dstMacAddress, 1);
+            if (!ipFrequency.containsKey(dstIpAddress)) {
+                ipFrequency.put(dstIpAddress, 1);
             } else {
-                Integer count = macFrequency.get(dstMacAddress);
+                Integer count = ipFrequency.get(dstIpAddress);
                 count += 1;
-                macFrequency.remove(dstMacAddress);
-                macFrequency.put(dstMacAddress, count);
+                ipFrequency.remove(dstIpAddress);
+                ipFrequency.put(dstIpAddress, count);
             }
         } else {
             middleAndHighCounter = 0;
+
             // W=1, mac唯一
-            if (macFrequency.size() == 1) {
+            if (ipFrequency.size() == 1) {
                 log.info("W=1");
-                entranceMachine.execute(Action.CAUSE_ONLY_ONE_DST_MAC);
+                entranceMachine.execute(Action.CAUSE_ONLY_ONE_DST_IP);
             }
+
             // 计算卡方值
             double chiSquareValue = 0.0;
-            Enumeration<String> e = macFrequency.keys();
+            Enumeration<String> e = ipFrequency.keys();
             while (e.hasMoreElements()) {
                 String key = e.nextElement();
-                Integer value = macFrequency.get(key);
-                double idealFrequency = MAX_PACKET_NUM / (double) MAX_MAC_NUM;
-                chiSquareValue += (value - idealFrequency) * (value - idealFrequency) / idealFrequency;
+                Integer value = ipFrequency.get(key);
+                double idealFrequency = MAX_PACKET_NUM / (double) MAX_IP_NUM;
+                chiSquareValue += Math.pow((value - idealFrequency), 2) / idealFrequency;
             }
             log.info("卡方值: " + chiSquareValue);
+
             // 检查卡方值
             if (chiSquareValue == 0) {
-                // 卡方值=0
                 entranceMachine.execute(Action.CAUSE_CHI_SQUARE_VALUE_0);
             } else if (chiSquareValue > LOW_CHI_SQUARE_VALUE) {
-                // 卡方值大于阈值
                 entranceMachine.execute(Action.CAUSE_CHI_SQUARE_VALUE_OVER_LOW);
             } else {
-                // 卡方值正常
                 entranceMachine.execute(Action.CAUSE_CHI_SQUARE_VALUE_NORMAL);
             }
         }
